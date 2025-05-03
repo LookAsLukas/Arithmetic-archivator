@@ -108,6 +108,7 @@ void encode(char **filenames, int filecnt, char *archivename, flags_t flags) {
 
     fwrite(&filecnt, 4, 1, out);
     int failcnt = 0;
+    double totalsizein = 0, totalsizeout = 0;
     for (int i = 0; i < filecnt; i++) {
         FILE *in = fopen(filenames[i], "rb");
         if (!in) {
@@ -124,9 +125,11 @@ void encode(char **filenames, int filecnt, char *archivename, flags_t flags) {
             de[i] = 0;
         }
         encode_(in, out, flags);
+        totalsizein += ftell(in);
         fclose(in);
         printf("Successfully encoded %s!\n", filenames[i]);
     }
+    totalsizeout = ftell(out);
 
     if (failcnt) {
         printf("Failed to encode %d file(s)\n", failcnt);
@@ -136,5 +139,10 @@ void encode(char **filenames, int filecnt, char *archivename, flags_t flags) {
     }
 
     printf("Successfully encoded into %s!\n", archivename);
+    printf("Total input size: ");
+    print_size(totalsizein);
+    printf("\nOutput size: ");
+    print_size(totalsizeout);
+    printf("\nCompression rate: %.1lf%%\n", totalsizeout / totalsizein * 100);
     fclose(out);
 }

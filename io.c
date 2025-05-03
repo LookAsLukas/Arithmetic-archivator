@@ -83,3 +83,19 @@ char* print_directory(char *path) {
     }
     return save + 1;
 }
+
+void print_size(double size) {
+    int ind = 0;
+    while (ind < 4 && floor(log10(size)) + 1 > 3) {
+        size /= 1000;
+        ind++;
+    }
+
+    char *sizes[] = {
+        "B",
+        "KB",
+        "MB",
+        "GB"
+    };
+    printf("%.1lf %s", size, sizes[ind]);
+}
