@@ -68,7 +68,7 @@ void print_options() {
     for (int i = 0; i < sizeof(options) / sizeof(options[0]); i++) {
         printf("  %-20s  %s\n", options[i], descriptions[i]);
     }
-    printf("\nEncode mode:\n  Encodes files <file>, <file1>, <file2> ...\n  Archive appers in the current directory\n  and has optionally specified name\n");
+    printf("\nEncode mode:\n  Encodes files <file>, <file1>, <file2> ...\n  Archive appears in the current directory\n  and has optionally specified name\n");
     printf("Decode mode:\n  Decodes archive <file> into files <file1> <file2> ...\n  If there are more files in the archive than names given,\n  all unspecified names get assigned a name of the form [file{n}],\n  where n is the index of current file\n  Files appear in the optionally specified directory\n");
 }
 

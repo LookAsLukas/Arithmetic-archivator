@@ -91,6 +91,12 @@ void decode_handle(int argc, char **argv) {
 
 int main(int argc, char **argv) {
     for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
+            print_options();
+            return 0;
+        }
+    }
+    for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-e")) {
             encode_handle(argc, argv);
             break;
@@ -99,11 +105,6 @@ int main(int argc, char **argv) {
             decode_handle(argc, argv);
             break;
         }
-        if (strcmp(argv[i], "-h") && strcmp(argv[i], "--help")) {
-            continue;
-        }
-        print_options();
-        break;
     }
     
     // char *files[] = {"input.txt", "in.txt", "lolkek.txt"};
