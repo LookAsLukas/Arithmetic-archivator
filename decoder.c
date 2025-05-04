@@ -159,7 +159,11 @@ void decode(char *archivename, char **filenames, int namecnt, char *directory) {
     }
 
     int filecnt;
-    fread(&filecnt, 4, 1, in);
+    if (!fread(&filecnt, 4, 1, in)) {
+        printf("Aborting: incorrect file format\n");
+        fclose(in);
+        return;
+    }
     for (int i = 0; i < filecnt; i++) {
         FILE *out;
         char *final_name = filenames[i];
