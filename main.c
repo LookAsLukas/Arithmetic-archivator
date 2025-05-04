@@ -1,5 +1,4 @@
 #include "coders.h"
-#include <string.h>
 
 int err = 0;
 
@@ -106,21 +105,5 @@ int main(int argc, char **argv) {
             break;
         }
     }
-    
-    // char *files[] = {"input.txt", "in.txt", "lolkek.txt"};
-    // encode(files, 3, "ararar", (flags_t){0});
-    // char *files_o[] = {"input_o.txt", "in_o.txt"};
-    // decode("ararar", files_o, 2);
-    // FILE *text = fopen("input.txt", "rb+");
-    // FILE *encoded = fopen("output.bin", "wb");
-    // encode_(text, encoded);
-    // fclose(text);
-    // fclose(encoded);
-    
-    // encoded = fopen("output.bin", "rb+");
-    // FILE *decoded = fopen("lolkek.txt", "wb");
-    // decode_(encoded, decoded);
-    // fclose(encoded);
-    // fclose(decoded);
     return 0;
 }

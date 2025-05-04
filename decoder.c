@@ -1,8 +1,7 @@
 #include "coders.h"
-#include <math.h>
 
-uint32_t r[256];
-uint64_t c[256], d[256], R;
+uint32_t rate_decode[256];
+uint64_t left_border_decode[256], right_border_decode[256], total_decode;
 
 int errorflag = 0, emptyflag = 0, lastfile = 0;
 
@@ -27,7 +26,7 @@ int get_next_bit(FILE *in) {
     return (curr >> (--curr_cnt)) & 1;
 }
 
-uint32_t read_z(FILE *in) {
+uint32_t get_decode_sample(FILE *in) {
     uint32_t res = 0;
     for (int i = 0; i < 32; i++) {
         res |= get_next_bit(in) << (31 - i);
@@ -38,7 +37,7 @@ uint32_t read_z(FILE *in) {
     return res;
 }
 
-void get_r(FILE *in, int ascii) {
+void read_prerequisites(FILE *in, int ascii) {
     uint8_t f;
     if (!fread(&f, 1, 1, in)) {
         errorflag = 2;
@@ -49,7 +48,7 @@ void get_r(FILE *in, int ascii) {
 
     if (f) {
         for (int i = 0; i < 256 / (ascii + 1); i++) {
-            if (!fread(r + i, 4 / (isshort + 1), 1, in)) {
+            if (!fread(rate_decode + i, 4 / (isshort + 1), 1, in)) {
                 errorflag = 3;
                 return;
             }
@@ -69,7 +68,7 @@ void get_r(FILE *in, int ascii) {
             errorflag = 5;
             return;
         }
-        if (!fread(r + i, 4 / (isshort + 1), 1, in)) {
+        if (!fread(rate_decode + i, 4 / (isshort + 1), 1, in)) {
             errorflag = 6;
             return;
         }
@@ -82,77 +81,69 @@ void decode_(FILE *in, FILE *out) {
         errorflag = 7;
         return;
     }
-    get_r(in, ascii);
+    read_prerequisites(in, ascii);
     if (errorflag) {
         return;
     }
-    d[0] = r[0];
+    right_border_decode[0] = rate_decode[0];
     for (int i = 1; i < 256; i++) {
-        c[i] = c[i - 1] + r[i - 1];
-        d[i] = c[i] + r[i];
+        left_border_decode[i] = left_border_decode[i - 1] + rate_decode[i - 1];
+        right_border_decode[i] = left_border_decode[i] + rate_decode[i];
     }
-    R = d[255];
+    total_decode = right_border_decode[255];
 
-    if (!R) {
+    if (!total_decode) {
         emptyflag = 8;
         return;
     }
 
-    // for (int i = 0; i < 80; i++) {
-    //     printf("%d", get_next_bit(in));
-    //     if (i % 8 == 7) {
-    //         printf("");
-    //     }
-    // }
-    // printf("\n");
-    // return;
-
-    uint64_t a = 0, b = WHOLE, cnt = 0;
-    uint64_t z = read_z(in);
+    uint64_t left = 0, right = WHOLE, outputted_cnt = 0;
+    uint64_t decode_sample = get_decode_sample(in);
     if (errorflag) {
         return;
     }
     while (1) {
-        // printf("Z: %lu\n", z);
         for (int i = 0; i < 256; i++) {
-            uint64_t w = b - a, b0 = a + (w * d[i]) / R, a0 = a + (w * c[i]) / R;
-            if (a0 <= z && z < b0) {
-                // printf("a0 b0: %lu %lu ||| %d\n", a0, b0, i);
-                uint8_t lol = i;
-                fwrite(&lol, 1, 1, out);
-                cnt++;
-                a = a0;
-                b = b0;
-                if (cnt == R) {
+            uint64_t width = right - left;
+            uint64_t right_candidate = left + (width * right_border_decode[i]) / total_decode;
+            uint64_t left_candidate = left + (width * left_border_decode[i]) / total_decode;
+            
+            if (left_candidate <= decode_sample && decode_sample < right_candidate) {
+                uint8_t output_byte = i;
+                fwrite(&output_byte, 1, 1, out);
+                outputted_cnt++;
+                left = left_candidate;
+                right = right_candidate;
+                if (outputted_cnt == total_decode) {
                     return;
                 }
                 break;
             }
         }
 
-        while (b < HALF || a > HALF) {
-            if (b < HALF) {
-                a <<= 1;
-                b <<= 1;
-                z <<= 1;
-            } else if (a > HALF) {
-                a = 2 * (a - HALF);
-                b = 2 * (b - HALF);
-                z = 2 * (z - HALF);
+        while (right < HALF || left > HALF) {
+            if (right < HALF) {
+                left <<= 1;
+                right <<= 1;
+                decode_sample <<= 1;
+            } else if (left > HALF) {
+                left = 2 * (left - HALF);
+                right = 2 * (right - HALF);
+                decode_sample = 2 * (decode_sample - HALF);
             }
 
-            z |= get_next_bit(in);
+            decode_sample |= get_next_bit(in);
             if (errorflag) {
                 return;
             }
         }
 
-        while (a > QUARTER && b < 3 * QUARTER) {
-            a = 2 * (a - QUARTER);
-            b = 2 * (b - QUARTER);
-            z = 2 * (z - QUARTER);
+        while (left > QUARTER && right < 3 * QUARTER) {
+            left = 2 * (left - QUARTER);
+            right = 2 * (right - QUARTER);
+            decode_sample = 2 * (decode_sample - QUARTER);
 
-            z |= get_next_bit(in);
+            decode_sample |= get_next_bit(in);
             if (errorflag) {
                 return;
             }
@@ -202,9 +193,9 @@ void decode(char *archivename, char **filenames, int namecnt, char *directory) {
         
         get_next_bit(NULL);
         for (int i = 0; i < 256; i++) {
-            r[i] = 0;
-            c[i] = 0;
-            d[i] = 0;
+            rate_decode[i] = 0;
+            left_border_decode[i] = 0;
+            right_border_decode[i] = 0;
         }
         emptyflag = 0;
         lastfile = i == filecnt - 1;

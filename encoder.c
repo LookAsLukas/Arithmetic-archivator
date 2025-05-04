@@ -1,103 +1,101 @@
 #include "coders.h"
 
-uint32_t re[256];
-uint64_t ce[256], de[256], Re;
+uint32_t rate_encode[256];
+uint64_t left_border_encode[256], right_border_encode[256], total_encode;
 
-void read_r(FILE *in, flags_t flags) {
+void calc_rate(FILE *in, flags_t flags) {
     int pos = ftell(in);
     uint8_t curr;
     while (fread(&curr, 1, 1, in)) {
         if (curr >= 128 && flags.ascii) {
             continue;
         }
-        re[curr]++;
+        rate_encode[curr]++;
     }
     fseek(in, pos, SEEK_SET);
 }
 
-void write_r(FILE *out, flags_t flags) {
+void write_prerequisites(FILE *out, flags_t flags) {
     int notnullcnt = 0, canbeshort = 1;
     for (int i = 0; i < 256; i++) {
-        notnullcnt += re[i] != 0;
-        if (re[i] >= (1 << 16)) {
+        notnullcnt += rate_encode[i] != 0;
+        if (rate_encode[i] >= (1 << 16)) {
             canbeshort = 0;
         }
     }
 
     if (notnullcnt > 1024 / 5) {
-        uint8_t f = 1 | (canbeshort << 1);
-        fwrite(&f, 1, 1, out);
+        uint8_t flag = 1 | (canbeshort << 1);
+        fwrite(&flag, 1, 1, out);
         for (int i = 0; i < 256 / (flags.ascii + 1); i++) {
-            fwrite(re + i, 4 / (canbeshort + 1), 1, out);
+            fwrite(rate_encode + i, 4 / (canbeshort + 1), 1, out);
         }
         return;
     }
 
-    uint8_t f = 0 | (canbeshort << 1);
-    fwrite(&f, 1, 1, out);
+    uint8_t flag = 0 | (canbeshort << 1);
+    fwrite(&flag, 1, 1, out);
     fwrite(&notnullcnt, 4, 1, out);
     for (int i = 0; i < 256; i++) {
-        if (!re[i]) {
+        if (!rate_encode[i]) {
             continue;
         }
         uint8_t buf = i;
         fwrite(&buf, 1, 1, out);
-        fwrite(re + i, 4 / (canbeshort + 1), 1, out);
+        fwrite(rate_encode + i, 4 / (canbeshort + 1), 1, out);
     }
 }
 
 void encode_(FILE *in, FILE *out, flags_t flags) {
-    read_r(in, flags);
+    calc_rate(in, flags);
     fwrite(&flags.ascii, 1, 1, out);
-    write_r(out, flags);
+    write_prerequisites(out, flags);
     
-    de[0] = re[0];
+    right_border_encode[0] = rate_encode[0];
     for (int i = 1; i < 256; i++) {
-        ce[i] = ce[i - 1] + re[i - 1];
-        de[i] = ce[i] + re[i];
+        left_border_encode[i] = left_border_encode[i - 1] + rate_encode[i - 1];
+        right_border_encode[i] = left_border_encode[i] + rate_encode[i];
     }
-    Re = de[255];
+    total_encode = right_border_encode[255];
 
-    if (!Re) {
+    if (!total_encode) {
         return;
     }
 
     uint8_t curr;
-    uint64_t a = 0, b = WHOLE, s = 0;
+    uint64_t left = 0, right = WHOLE, message = 0;
     while (fread(&curr, 1, 1, in)) {
         if (curr >= 128 && flags.ascii) {
             continue;
         }
 
-        uint64_t w = b - a;
-        b = a + w * de[curr] / Re;
-        a = a + w * ce[curr] / Re;
+        uint64_t width = right - left;
+        right = left + width * right_border_encode[curr] / total_encode;
+        left = left + width * left_border_encode[curr] / total_encode;
 
-        while (b < HALF || a > HALF) {
-            if (b < HALF) {
-                emit(out, s, 0);
-                s = 0;
-                a <<= 1;
-                b <<= 1;
-            } else if (a > HALF) {
-                emit(out, s, 1);
-                s = 0;
-                a = 2 * (a - HALF);
-                b = 2 * (b - HALF);
+        while (right < HALF || left > HALF) {
+            if (right < HALF) {
+                emit(out, message, 0);
+                message = 0;
+                left <<= 1;
+                right <<= 1;
+            } else if (left > HALF) {
+                emit(out, message, 1);
+                message = 0;
+                left = 2 * (left - HALF);
+                right = 2 * (right - HALF);
             }
         }
 
-        while (a > QUARTER && b < 3 * QUARTER) {
-            s++;
-            a = 2 * (a - QUARTER);
-            b = 2 * (b - QUARTER);
+        while (left > QUARTER && right < 3 * QUARTER) {
+            message++;
+            left = 2 * (left - QUARTER);
+            right = 2 * (right - QUARTER);
         }
     }
 
-    s++;
-    // printf("s: %d\n", s);
-    curr = a <= QUARTER ? emit(out, s, 0) : emit(out, s, 1);
-    // bits(curr);
+    message++;
+    curr = left <= QUARTER ? emit(out, message, 0) : emit(out, message, 1);
     fwrite(&curr, 1, 1, out);
 }
 
@@ -124,9 +122,9 @@ void encode(char **filenames, int filecnt, char *archivename, flags_t flags) {
         
         emit(NULL, 0, 0);
         for (int i = 0; i < 256; i++) {
-            re[i] = 0;
-            ce[i] = 0;
-            de[i] = 0;
+            rate_encode[i] = 0;
+            left_border_encode[i] = 0;
+            right_border_encode[i] = 0;
         }
         encode_(in, out, flags);
         totalsizein += ftell(in);

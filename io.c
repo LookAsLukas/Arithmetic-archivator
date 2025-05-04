@@ -7,14 +7,9 @@ void bits(uint8_t n) {
     printf("\n");
 }
 
-/*
-mode = 0 --> 0111..11
-mode = 1 --> 1000..00
-*/
 uint8_t emit(FILE *out, uint64_t s, int mode) {
     static uint8_t curr = 0;
     static int curr_cnt = 0;
-    //printf("emitted %d bits :: ", s + 1);
 
     if (!out) {
         curr = 0;
@@ -23,10 +18,7 @@ uint8_t emit(FILE *out, uint64_t s, int mode) {
     }
 
     curr |= mode << (7 - curr_cnt);
-    //printf("%d", mode);
     if (++curr_cnt == 8) {
-        //printf("emit: ");
-        //bits(curr);
         fwrite(&curr, 1, 1, out);
         curr = 0;
         curr_cnt = 0;
@@ -35,16 +27,12 @@ uint8_t emit(FILE *out, uint64_t s, int mode) {
 
     while (s--) {
         curr |= mode << (7 - curr_cnt);
-        //printf("%d", mode);
         if (++curr_cnt == 8) {
-            // printf("emit: ");
-            // bits(curr);
             fwrite(&curr, 1, 1, out);
             curr = 0;
             curr_cnt = 0;
         }
     }
-    //printf("\n");
 
     return curr;
 }
