@@ -64,6 +64,10 @@ void decode_(FILE *in, FILE *out) {
     }
     R = d[255];
 
+    if (!R) {
+        return;
+    }
+
     // for (int i = 0; i < 80; i++) {
     //     printf("%d", get_next_bit(in));
     //     if (i % 8 == 7) {
