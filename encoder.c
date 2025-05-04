@@ -58,6 +58,10 @@ void encode_(FILE *in, FILE *out, flags_t flags) {
     }
     Re = de[255];
 
+    if (!Re) {
+        return;
+    }
+
     uint8_t curr;
     uint64_t a = 0, b = WHOLE, s = 0;
     while (fread(&curr, 1, 1, in)) {

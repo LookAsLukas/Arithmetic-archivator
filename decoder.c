@@ -4,6 +4,8 @@
 uint32_t r[256];
 uint64_t c[256], d[256], R;
 
+int errorflag = 0, emptyflag = 0, lastfile = 0;
+
 int get_next_bit(FILE *in) {
     static uint8_t curr = 0;
     static int curr_cnt = 0;
@@ -15,7 +17,10 @@ int get_next_bit(FILE *in) {
     }
     
     if (!curr_cnt) {
-        fread(&curr, 1, 1, in);
+        if (!fread(&curr, 1, 1, in) && !lastfile) {
+            errorflag = 1;
+            return (curr >> 7) & 1;
+        }
         curr_cnt = 8;
     }
 
@@ -26,37 +31,61 @@ uint32_t read_z(FILE *in) {
     uint32_t res = 0;
     for (int i = 0; i < 32; i++) {
         res |= get_next_bit(in) << (31 - i);
+        if (errorflag) {
+            return 0;
+        }
     }
     return res;
 }
 
 void get_r(FILE *in, int ascii) {
     uint8_t f;
-    fread(&f, 1, 1, in);
+    if (!fread(&f, 1, 1, in)) {
+        errorflag = 2;
+        return;
+    }
     int isshort = (f >> 1) & 1;
     f = f & 1;
 
     if (f) {
         for (int i = 0; i < 256 / (ascii + 1); i++) {
-            fread(r + i, 4 / (isshort + 1), 1, in);
+            if (!fread(r + i, 4 / (isshort + 1), 1, in)) {
+                errorflag = 3;
+                return;
+            }
         }
         return;
     }
 
     int rcnt;
-    fread(&rcnt, 4, 1, in);
+    if (!fread(&rcnt, 4, 1, in)) {
+        errorflag = 4;
+        return;
+    }
+    
     while (rcnt--) {
         uint8_t i;
-        fread(&i, 1, 1, in);
-        fread(r + i, 4 / (isshort + 1), 1, in);
+        if (!fread(&i, 1, 1, in)) {
+            errorflag = 5;
+            return;
+        }
+        if (!fread(r + i, 4 / (isshort + 1), 1, in)) {
+            errorflag = 6;
+            return;
+        }
     }
 }
 
 void decode_(FILE *in, FILE *out) {
     char ascii;
-    fread(&ascii, 1, 1, in);
+    if (!fread(&ascii, 1, 1, in)) {
+        errorflag = 7;
+        return;
+    }
     get_r(in, ascii);
-    
+    if (errorflag) {
+        return;
+    }
     d[0] = r[0];
     for (int i = 1; i < 256; i++) {
         c[i] = c[i - 1] + r[i - 1];
@@ -65,6 +94,7 @@ void decode_(FILE *in, FILE *out) {
     R = d[255];
 
     if (!R) {
+        emptyflag = 8;
         return;
     }
 
@@ -79,6 +109,9 @@ void decode_(FILE *in, FILE *out) {
 
     uint64_t a = 0, b = WHOLE, cnt = 0;
     uint64_t z = read_z(in);
+    if (errorflag) {
+        return;
+    }
     while (1) {
         // printf("Z: %lu\n", z);
         for (int i = 0; i < 256; i++) {
@@ -109,6 +142,9 @@ void decode_(FILE *in, FILE *out) {
             }
 
             z |= get_next_bit(in);
+            if (errorflag) {
+                return;
+            }
         }
 
         while (a > QUARTER && b < 3 * QUARTER) {
@@ -117,6 +153,9 @@ void decode_(FILE *in, FILE *out) {
             z = 2 * (z - QUARTER);
 
             z |= get_next_bit(in);
+            if (errorflag) {
+                return;
+            }
         }
     }
 }
@@ -167,9 +206,22 @@ void decode(char *archivename, char **filenames, int namecnt, char *directory) {
             c[i] = 0;
             d[i] = 0;
         }
+        emptyflag = 0;
+        lastfile = i == filecnt - 1;
         decode_(in, out);
+        if (errorflag) {
+            printf("Aborting: incorrect file format\n");
+            if (freefinal) {
+                free(final_name);
+            }
+            fclose(out);
+            fclose(in);
+            return;
+        }
         fclose(out);
-        fseek(in, -3, SEEK_CUR);
+        if (!emptyflag) {
+            fseek(in, -3, SEEK_CUR);
+        }
         printf("Successfully decoded into %s...\n", final_name);
         if (freefinal) {
             free(final_name);
